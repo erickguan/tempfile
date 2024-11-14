@@ -1,5 +1,5 @@
 //! Temporary files and directories.
-//!
+//! https://chatgpt.com/share/e/6737561e-4e44-8002-a6a8-e7f5d49813f2
 //! - Use the [`tempfile()`] function for temporary files
 //! - Use the [`tempdir()`] function for temporary directories.
 //!
@@ -27,8 +27,13 @@
 //! a temporary file cleaner could delete the temporary file which an attacker could then replace.
 //!
 //! `tempfile` doesn't rely on file paths so this isn't an issue. However, `NamedTempFile` does
-//! rely on file paths for _some_ operations. See the security documentation on
+//! rely on file paths for _some_ operations. See the [security][security] documentation on
 //! the `NamedTempFile` type for more information.
+//! 
+//! On some Unix systems, most Linux distributions, `TMPDIR` is `/tmp` which is global and
+//! has a sticky bit. Any processes will have the permission to read and write the temporary file
+//! if other processes know the temporary file path. As a mitigation, `tempfile` allows setting
+//! temporary paths. Read more about "Customize temporary paths".
 //!
 //! ## Early drop pitfall
 //!
@@ -58,6 +63,18 @@
 //! being deleted, before the command can be executed.
 //!
 //! The `touch` command would fail with an `No such file or directory` error.
+//! 
+//! ## Customize temporary paths
+//! 
+//! `tempdir` uses a default directory based on platforms. By default, `tempdir` refers to path
+//! defined in Rust standard library `std::env::temp_dir`. On Unix, `std::env::temp_dir` follows
+//! `TMPDIR` environment variable if set.
+//! You can use `tempfile::env::override_temp_dir` to change the temporary directory.
+//! `tempfile::env::override_temp_dir` changes where `tempfile()` and `tempdir()` creates entries
+//! in. Read more about [`env::override_temp_dir`].
+//! 
+//! Additionally, use `Builder` to create a temporary file or a directory. `Builder` also allows
+//! you set permissions. Read more about [`Builder`].
 //!
 //! ## Examples
 //!
@@ -121,12 +138,26 @@
 //! dir.close()?;
 //! # Ok::<(), std::io::Error>(())
 //! ```
+//! 
+//! Use Builder to create a temporary directory and add a file to it:
+//!
+//! ```
+//! use tempfile::Builder;
+//! use std::os::unix::fs::PermissionsExt;
+//!
+//! let dir = Builder::new()
+//!     .permissions(std::fs::Permissions::from_mode(0o700))
+//!     .tempdir()?;
+//! ```
 //!
 //! [`tempfile()`]: fn.tempfile.html
 //! [`tempdir()`]: fn.tempdir.html
 //! [`TempDir`]: struct.TempDir.html
 //! [`NamedTempFile`]: struct.NamedTempFile.html
 //! [`lazy_static`]: https://github.com/rust-lang-nursery/lazy-static.rs/issues/62
+//! [`env::override_temp_dir`]: env/fn.override_temp_dir.html
+//! [`Builder`]: struct.Builder.html
+//! [security]: struct.NamedTempFile.html#security
 
 #![doc(
     html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
@@ -346,7 +377,7 @@ impl<'a, 'b> Builder<'a, 'b> {
     ///
     /// # Security
     ///
-    /// By default, the permissions of tempfiles on unix are set for it to be
+    /// By default, the permissions of tempfiles on Unix are set for it to be
     /// readable and writable by the owner only, yielding the greatest amount
     /// of security.
     /// As this method allows to widen the permissions, security would be
